@@ -21,6 +21,7 @@ import 'widgets/local_music_badge.dart';
 import 'notifications/notification_center_page.dart';
 import 'services/notification_service.dart';
 import 'services/subscription_service.dart';
+import 'services/ad_service.dart';
 
 // ============================================================
 // COLORES BASE DE SOUNDNEED
@@ -842,6 +843,7 @@ class _MusicHomePageState extends State<MusicHomePage> {
                           minimum: const EdgeInsets.only(bottom: 4),
                           child: MiniPlayer(player: widget.player),
                         ),
+                      const SoundNeedBannerAd(),
                     ],
                   ),
                 ),
