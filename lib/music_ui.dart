@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 
 import 'music_player.dart';
 import 'player_navigation.dart';
@@ -19,6 +20,7 @@ import 'widgets/soundneed_search_field.dart';
 import 'widgets/local_music_badge.dart';
 import 'notifications/notification_center_page.dart';
 import 'services/notification_service.dart';
+import 'services/subscription_service.dart';
 
 // ============================================================
 // COLORES BASE DE SOUNDNEED
@@ -1201,6 +1203,7 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
   int _paletteRequest = 0;
   Timer? _sleepTimerUi;
   final NotificationService _notificationService = NotificationService.instance;
+  final SubscriptionService _subscriptionService = SubscriptionService.instance;
 
   @override
   void initState() {
@@ -1210,6 +1213,7 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
     WidgetsBinding.instance.addObserver(this);
     widget.player.addListener(_onPlayerChanged);
     _notificationService.addListener(_onNotificationSettingsChanged);
+    _subscriptionService.addListener(_onSubscriptionChanged);
     unawaited(_loadSettingsPalette(widget.player.currentSong));
     _loadSettingsInfo();
     unawaited(
@@ -1229,6 +1233,7 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
     WidgetsBinding.instance.removeObserver(this);
     widget.player.removeListener(_onPlayerChanged);
     _notificationService.removeListener(_onNotificationSettingsChanged);
+    _subscriptionService.removeListener(_onSubscriptionChanged);
     _sleepTimerUi?.cancel();
     super.dispose();
   }
@@ -1240,6 +1245,92 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
       unawaited(_loadSettingsPalette(song));
     }
     if (mounted) setState(() {});
+  }
+
+  void _onSubscriptionChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _buyPremium() async {
+    final active = await _subscriptionService.presentPaywall();
+    await _showPurchaseResult(active);
+  }
+
+  Future<void> _buyPackage(Package package, String planName) async {
+    final active = await _subscriptionService.purchase(package);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          active
+              ? 'SoundNeed Premium está activo.'
+              : _subscriptionService.error ??
+                    'No se pudo comprar el plan $planName.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPurchaseResult(bool active) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          active
+              ? 'SoundNeed Premium está activo.'
+              : _subscriptionService.error ?? 'La compra no pudo completarse.',
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _subscriptionPlanOptions(Color accent) {
+    final plans = <({Package package, String label})>[
+      if (_subscriptionService.threeMonthPackage case final package?)
+        (package: package, label: '3 meses'),
+      if (_subscriptionService.annualPackage case final package?)
+        (package: package, label: '1 año'),
+    ];
+    if (plans.isEmpty) return const [];
+    return [
+      const SizedBox(height: 8),
+      for (final plan in plans)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: OutlinedButton(
+            onPressed:
+                _subscriptionService.isLoading || _subscriptionService.isPremium
+                ? null
+                : () => unawaited(_buyPackage(plan.package, plan.label)),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              foregroundColor: accent,
+              side: BorderSide(color: accent.withValues(alpha: .45)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(plan.label),
+                Text(_subscriptionService.displayPriceFor(plan.package)),
+              ],
+            ),
+          ),
+        ),
+    ];
+  }
+
+  Future<void> _restorePremium() async {
+    final active = await _subscriptionService.restorePurchases();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          active
+              ? 'Tu suscripción Premium fue restaurada.'
+              : 'No encontramos una suscripción Premium activa.',
+        ),
+      ),
+    );
   }
 
   Future<void> _loadSettingsPalette(Song? song) async {
@@ -1620,7 +1711,11 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
                           ),
                         ),
                         child: Text(
-                          'PRÓXIMAMENTE',
+                          _subscriptionService.isPremium
+                              ? 'ACTIVO'
+                              : _subscriptionService.isInitialized
+                              ? 'DISPONIBLE'
+                              : 'CONFIGURAR',
                           style: TextStyle(
                             color: accent,
                             fontSize: 9,
@@ -1671,7 +1766,11 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '\$6.900',
+                          _subscriptionService.monthlyPackage == null
+                              ? r'$6.900'
+                              : _subscriptionService.displayPriceFor(
+                                  _subscriptionService.monthlyPackage!,
+                                ),
                           style: TextStyle(
                             color: accent,
                             fontSize: 31,
@@ -1731,7 +1830,9 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
                         const SizedBox(width: 9),
                         Expanded(
                           child: Text(
-                            'Pronto anunciaremos qué incluye el plan.',
+                            _subscriptionService.isPremium
+                                ? 'Premium está activo en este dispositivo.'
+                                : 'Incluye reproducción Premium y funciones exclusivas.',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: .88),
                               fontSize: 12,
@@ -1741,6 +1842,40 @@ class _SoundNeedSettingsPageState extends State<SoundNeedSettingsPage>
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed:
+                          _subscriptionService.isLoading ||
+                              _subscriptionService.isPremium
+                          ? null
+                          : () => unawaited(_buyPremium()),
+                      icon: _subscriptionService.isLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              _subscriptionService.isPremium
+                                  ? Icons.check_circle_outline_rounded
+                                  : Icons.workspace_premium_rounded,
+                            ),
+                      label: Text(
+                        _subscriptionService.isPremium
+                            ? 'Premium activo'
+                            : 'Suscribirme a Premium',
+                      ),
+                    ),
+                  ),
+                  ..._subscriptionPlanOptions(accent),
+                  TextButton(
+                    onPressed: _subscriptionService.isLoading
+                        ? null
+                        : () => unawaited(_restorePremium()),
+                    child: const Text('Restaurar compras'),
                   ),
                 ],
               ),

@@ -15,11 +15,13 @@ import 'playlist_manager.dart';
 import 'playlist_sharing.dart';
 import 'full_player.dart';
 import 'services/notification_service.dart';
+import 'services/subscription_service.dart';
 
 late final SoundNeedAudioHandler soundNeedAudioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(SubscriptionService.instance.initialize());
 
   soundNeedAudioHandler = await AudioService.init<SoundNeedAudioHandler>(
     builder: SoundNeedAudioHandler.new,

@@ -43,6 +43,8 @@ dependencies:
   image: ^4.10.1
   audio_service: ^0.18.19
   xml: ^6.6.1
+  purchases_flutter: ^10.10.0
+  purchases_ui_flutter: ^10.10.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

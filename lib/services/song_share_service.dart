@@ -38,6 +38,12 @@ class SongShareService {
         'El sitio público de enlaces de SoundNeed no está configurado.',
       );
     }
+    final deepUri = Uri.tryParse(deepLink.trim());
+    if (deepUri == null ||
+        deepUri.scheme != 'soundneed' ||
+        deepUri.host != 'track') {
+      throw StateError('El enlace interno de la canción no es válido.');
+    }
 
     final id = _newId();
     final shareArtwork = await _resizeCover(artwork);
@@ -86,7 +92,8 @@ class SongShareService {
         link.scheme != 'https' ||
         link.host != base.host ||
         link.pathSegments.length != 2 ||
-        link.pathSegments.first != 's') {
+        link.pathSegments.first != 's' ||
+        !RegExp(r'^[A-Za-z0-9_-]{12,24}$').hasMatch(link.pathSegments.last)) {
       throw StateError('El sitio devolvió un enlace de canción no válido.');
     }
     return link;
@@ -393,7 +400,9 @@ class SongShareService {
         shareLink.scheme != 'https' ||
         !SoundNeedShareLinks.supportsHost(shareLink.host) ||
         shareLink.pathSegments.length != 2 ||
-        shareLink.pathSegments.first != 's') {
+        shareLink.pathSegments.first != 's' ||
+        !RegExp(r'^[A-Za-z0-9_-]{12,24}$')
+            .hasMatch(shareLink.pathSegments.last)) {
       return null;
     }
     final response = await http
